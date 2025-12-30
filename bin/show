@@ -9,6 +9,7 @@ set -o nounset -o pipefail -o errexit
 VERSION="1.0.0"
 SHOW_SESSION="${SHOW_SESSION:-show}"
 SHOW_BROWSER="${SHOW_BROWSER:-}"  # Empty means auto-detect
+SHOW_AUTO_ATTACH="${SHOW_AUTO_ATTACH:-true}"  # Auto-attach terminal if session has no clients
 
 show_help() {
   cat <<EOF
@@ -25,13 +26,21 @@ Targets:
   pane:<id>                Focus tmux pane by ID
 
 Options:
-  -s, --session NAME       Tmux session for show window (default: $SHOW_SESSION)
+  -s, --session NAME       Force use of specific tmux session (skips nvim-remote)
   -p, --pane ID            Target specific pane ID
   -h, --help               Show this help
   -V, --version            Show version
 
+Behavior:
+  By default, show uses nvim-remote to open files in any available Neovim
+  instance. If no Neovim is available, it creates a "show" tmux session.
+
+  Use -s to explicitly specify a session, bypassing nvim-remote auto-detection.
+  This is useful when you want content displayed in a dedicated window.
+
 Examples:
-  show README.md                    # Open file
+  show README.md                    # Open in any available Neovim
+  show -s show README.md            # Force use of "show" session
   show src/main.py:42               # Open at line 42
   show src/main.py#L42              # Same (URL fragment style)
   show https://github.com           # Open in browser
@@ -42,6 +51,7 @@ Examples:
 Environment:
   SHOW_SESSION             Default tmux session (default: show)
   SHOW_BROWSER             Browser for URLs (default: auto-detect, prefers Firefox)
+  SHOW_AUTO_ATTACH         Auto-attach terminal if session has no clients (default: true)
   NVIM_SOCKET_PATH         Neovim socket for file opening
 
 EOF
@@ -75,21 +85,78 @@ parse_file_target() {
   echo "$line_number"
 }
 
+# Check if a tmux session has any attached clients
+session_has_clients() {
+  local session="$1"
+  local clients
+  clients=$(tmux list-clients -t "$session" 2>/dev/null)
+  [[ -n "$clients" ]]
+}
+
+# Open a new Terminal window and attach to the specified tmux session
+open_terminal_for_session() {
+  local session="$1"
+  local system
+  system="$(uname -s)"
+
+  case "$system" in
+    Darwin)
+      # macOS: Use AppleScript to open Terminal
+      osascript -e "
+        tell application \"Terminal\"
+          do script \"tmux attach-session -t $session\"
+          activate
+        end tell
+      " >/dev/null 2>&1
+      ;;
+    Linux)
+      # Linux: Try various terminal emulators
+      if command -v gnome-terminal >/dev/null 2>&1; then
+        gnome-terminal -- tmux attach-session -t "$session" &
+      elif command -v kitty >/dev/null 2>&1; then
+        kitty tmux attach-session -t "$session" &
+      elif command -v alacritty >/dev/null 2>&1; then
+        alacritty -e tmux attach-session -t "$session" &
+      elif command -v xterm >/dev/null 2>&1; then
+        xterm -e "tmux attach-session -t $session" &
+      elif command -v konsole >/dev/null 2>&1; then
+        konsole -e tmux attach-session -t "$session" &
+      else
+        echo "Warning: No supported terminal emulator found" >&2
+        return 1
+      fi
+      ;;
+    *)
+      echo "Warning: Unsupported platform for terminal auto-attach: $system" >&2
+      return 1
+      ;;
+  esac
+}
+
 # Get or create the show tmux session and window
 get_or_create_show_window() {
   local session="$1"
+  local created_session=false
 
   # Check if session exists
   if ! tmux has-session -t "$session" 2>/dev/null; then
     # Create session with show window
     tmux new-session -d -s "$session" -n "show"
     echo "Created session: $session"
+    created_session=true
   fi
 
   # Check if show window exists in session
   if ! tmux list-windows -t "$session" -F "#{window_name}" | grep -q "^show$"; then
     tmux new-window -t "$session" -n "show"
     echo "Created window: show"
+  fi
+
+  # Auto-attach terminal if session has no clients and auto-attach is enabled
+  if [[ "$SHOW_AUTO_ATTACH" == "true" ]] && ! session_has_clients "$session"; then
+    open_terminal_for_session "$session"
+    # Give terminal time to attach
+    sleep 0.5
   fi
 }
 
@@ -175,19 +242,37 @@ handle_file() {
     return 1
   fi
 
-  # Try to use nvim-remote if available
-  if command -v nvim-remote >/dev/null 2>&1; then
-    if [[ -n "$line_number" ]]; then
+  # Try to use nvim-remote if available (and session not explicitly specified)
+  # When user explicitly specifies -s session, we want to use that session, not nvim-remote's auto-detect
+  if command -v nvim-remote >/dev/null 2>&1 && [[ "${SHOW_SESSION_EXPLICIT:-false}" != "true" ]]; then
+    local nvim_success=false
+    if [[ -n "$line_number" && "$line_number" =~ ^[0-9]+$ ]]; then
       # Suppress nvim-remote output, we provide our own message
-      nvim-remote edit "$file_path" "$line_number" >/dev/null 2>&1 && {
-        echo "Opened $file_path at line $line_number"
-        return 0
-      }
+      nvim-remote edit "$file_path" "$line_number" >/dev/null 2>&1 && nvim_success=true
     else
-      nvim-remote edit "$file_path" >/dev/null 2>&1 && {
+      nvim-remote edit "$file_path" >/dev/null 2>&1 && nvim_success=true
+    fi
+
+    if [[ "$nvim_success" == "true" ]]; then
+      # nvim-remote opened the file somewhere, find out where and ensure visibility
+      local nvim_socket nvim_pane nvim_session
+      nvim_socket=$(nvim-remote status 2>/dev/null | grep "^Socket:" | cut -d' ' -f2)
+      if [[ -n "$nvim_socket" ]]; then
+        # Extract pane ID from socket path (e.g., /tmp/nvim-tmux-pane-37 -> 37)
+        nvim_pane="${nvim_socket##*-}"
+        # Find which session this pane is in
+        nvim_session=$(tmux list-panes -a -F "#{pane_id} #{session_name}" 2>/dev/null | grep "^%${nvim_pane} " | cut -d' ' -f2)
+        # Auto-attach terminal if that session has no clients
+        if [[ -n "$nvim_session" && "$SHOW_AUTO_ATTACH" == "true" ]] && ! session_has_clients "$nvim_session"; then
+          open_terminal_for_session "$nvim_session"
+        fi
+      fi
+      if [[ -n "$line_number" && "$line_number" =~ ^[0-9]+$ ]]; then
+        echo "Opened $file_path at line $line_number"
+      else
         echo "Opened $file_path"
-        return 0
-      }
+      fi
+      return 0
     fi
   fi
 
@@ -208,7 +293,7 @@ handle_file() {
     # Socket exists, wait for it to be responsive (may have just started)
     if wait_for_nvim_socket "$socket_path" 5 0.2; then
       # Neovim running and responsive, open file remotely
-      if [[ -n "$line_number" ]]; then
+      if [[ -n "$line_number" && "$line_number" =~ ^[0-9]+$ ]]; then
         nvim --server "$socket_path" --remote "$file_path" 2>/dev/null
         nvim --server "$socket_path" --remote-send ":${line_number}<CR>" 2>/dev/null
         echo "Opened $file_path at line $line_number"
@@ -228,7 +313,7 @@ handle_file() {
     # Wait for Neovim to start and socket to become available
     if wait_for_nvim_socket "$socket_path"; then
       # Socket ready, now jump to line if specified
-      if [[ -n "$line_number" ]]; then
+      if [[ -n "$line_number" && "$line_number" =~ ^[0-9]+$ ]]; then
         nvim --server "$socket_path" --remote-send ":${line_number}<CR>" 2>/dev/null
         echo "Opened $file_path at line $line_number"
       else
@@ -400,6 +485,7 @@ detect_and_handle() {
 
 main() {
   local session="$SHOW_SESSION"
+  local session_explicit=false
   local pane=""
   local target=""
 
@@ -416,6 +502,7 @@ main() {
         ;;
       -s|--session)
         session="$2"
+        session_explicit=true
         shift 2
         ;;
       -p|--pane)
@@ -443,6 +530,9 @@ main() {
     echo "Run 'show --help' for usage" >&2
     exit 1
   fi
+
+  # Export session_explicit for use in handle_file
+  export SHOW_SESSION_EXPLICIT="$session_explicit"
 
   detect_and_handle "$target" "$session" "$pane"
 }
