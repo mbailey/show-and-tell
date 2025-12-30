@@ -17,18 +17,12 @@ These are complementary - look verifies what show displayed.
   - `show` creates a dedicated "show" session for content display
   - `look` captures pane content and displays hierarchy
 
-### Recommended
+### Optional Enhancements
 
-- **neovim package** - Provides `nvim-remote` and `nvim-socket` utilities
-  - `show` uses nvim-remote to open files in existing Neovim instances
-  - `look` detects Neovim and queries file/position via socket
-  - Install: `mt package install neovim`
-
-- **tmux package** - Enhanced tmux utilities and Claude Code skill
-  - Complements show-and-tell with tmux management
-  - Install: `mt package install tmux`
-
-### Optional
+- **nvim-remote** - Enhanced Neovim socket integration
+  - Provides automatic socket detection and richer editor status
+  - Without it: show-and-tell uses calculated socket paths (works fine)
+  - With it: More flexible socket discovery across multiple Neovim instances
 
 - **Browser** - For URL display (Firefox preferred, configurable via SHOW_BROWSER)
 
@@ -66,27 +60,19 @@ look                          # Capture current pane context
 look --hierarchy              # Show tmux session/window/pane layout
 ```
 
-## Integration with Other Packages
+## Optional Integrations
 
-### neovim package
+### nvim-remote (optional)
 
-The show-and-tell package uses these utilities from the neovim package:
+If nvim-remote is available, show-and-tell uses it for enhanced features:
 
-- **nvim-remote**: Opens files in existing Neovim instances
-  - `show file.py` → `nvim-remote edit file.py`
-  - `show file.py:42` → `nvim-remote edit file.py 42`
+- **Auto socket detection**: Finds the best Neovim socket automatically
+- **Richer status**: More detailed editor state in `look` output
 
-- **nvim-socket**: Manages Neovim socket discovery
-  - Auto-detects sockets at `/tmp/nvim-tmux-pane-*`
-  - Used by `look` to query editor state
-
-### tmux package
-
-Both packages work together for terminal management:
-
-- show-and-tell's `look -H` shows tmux hierarchy
-- tmux package provides window/pane utilities
-- Combined: Navigate with tmux skill, display with show, observe with look
+Without nvim-remote, show-and-tell:
+- Uses calculated socket paths: `/tmp/nvim-tmux-pane-<pane_id>`
+- Uses direct `nvim --server` commands for file operations
+- **All core features work fully**
 
 ## Privacy
 

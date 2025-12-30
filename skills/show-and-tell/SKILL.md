@@ -294,16 +294,17 @@ AI (voice): "Yes, I can see you're viewing the error logs.
 
 ## Integration with Other Skills
 
-### neovim skill
+### neovim skill (optional)
 
-When showing files, `show` uses nvim-remote to open files in existing Neovim instances. The neovim skill provides:
-- Socket discovery (`nvim-socket list`)
-- Remote file opening (`nvim-remote edit`)
-- Editor status (`nvim-remote status`)
+If nvim-remote is available, `show` uses it for enhanced Neovim integration:
+- Automatic socket discovery
+- Richer editor status in `look` output
 
-### tmux skill
+Without nvim-remote, show-and-tell uses direct `nvim --server` commands with calculated socket paths. All core features work fully.
 
-Both commands rely on tmux for:
+### tmux (required)
+
+Both commands use tmux directly for:
 - Pane identification and capture (`look`)
 - Session/window management (`show` creates "show" session)
 - Running commands in shell panes (`show cmd:...`)
@@ -406,10 +407,15 @@ ls ${CLAUDE_PLUGIN_ROOT}/bin/show ${CLAUDE_PLUGIN_ROOT}/bin/look
 
 ## Requirements
 
-- **tmux**: Required for both commands
-- **Neovim**: Required for file display (with socket support)
-- **Browser**: Firefox preferred for URL display
-- **neovim package**: Provides nvim-remote and nvim-socket utilities
+### Required
+- **tmux**: Required for session/pane management (show) and screen capture (look)
+- **Neovim**: Required for file display (with `--listen` socket support)
+
+### Optional
+- **Browser**: Firefox preferred for URL display (falls back to system default)
+- **nvim-remote**: Enhanced Neovim integration with auto socket detection
+  - Without it: Uses calculated socket path `/tmp/nvim-tmux-pane-<id>`
+  - With it: Automatic socket discovery and richer editor status
 
 ## References
 
