@@ -1,6 +1,6 @@
 ---
 name: show-and-tell
-description: Visual context sharing between AI and users. Use this skill when displaying files/URLs/commands to users with `show`, or observing what users are viewing with `look`. Essential for voice mode and hands-free interaction.
+description: Visual context sharing between AI and users. Use this skill whenever the user asks you to show something or to look at their screen content. Essential for voice mode and hands-free interaction.
 ---
 
 # show-and-tell Skill
