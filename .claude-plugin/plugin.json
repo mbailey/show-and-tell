@@ -1,6 +1,6 @@
 {
   "name": "show-and-tell",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Visual context sharing between AI and users - display files/URLs/commands with 'show', observe screen context with 'look'",
   "author": {
     "name": "Mike Bailey",
@@ -9,5 +9,11 @@
   "repository": "https://github.com/mbailey/metool-packages-dev",
   "homepage": "https://github.com/mbailey/metool-packages-dev/tree/main/show-and-tell",
   "license": "MIT",
-  "keywords": ["tmux", "neovim", "voice-mode", "visual-context", "screen-capture"]
+  "keywords": [
+    "tmux",
+    "neovim",
+    "voice-mode",
+    "visual-context",
+    "screen-capture"
+  ]
 }
