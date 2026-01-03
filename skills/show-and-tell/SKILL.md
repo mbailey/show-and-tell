@@ -54,9 +54,72 @@ look window                       # All panes in window
 - [Voice Mode](docs/voice-mode.md) - Hands-free workflows
 - [Troubleshooting](docs/troubleshooting.md) - Common issues
 
+## Chrome Browser Integration
+
+When Claude-in-Chrome MCP is available, prefer using it for URLs to enable interactive browser control.
+
+### Why Use Chrome MCP
+
+- **Interactive control**: Scroll, click, and interact with page elements
+- **Page inspection**: Read page content with `read_page` tool
+- **Form filling**: Use `form_input` for automated form completion
+- **Screenshots**: Capture visual state with `computer` action: screenshot
+- **Better demos**: Live browser interaction for presentations
+
+### Detection and Fallback Pattern
+
+Before showing a URL, check if you have access to `mcp__claude-in-chrome__` tools:
+
+```
+AI wants to show URL
+    │
+    ▼
+Does AI have mcp__claude-in-chrome__* tools?
+    │
+    ├─ YES ──► Call tabs_context_mcp to verify connection
+    │              │
+    │              ├─ Connected ──► Use navigate tool
+    │              │
+    │              └─ Not connected ──► Fall back to show command
+    │
+    └─ NO ───► Use show command directly
+```
+
+### Example: Show URL with Chrome MCP
+
+```bash
+# Step 1: Check if Chrome MCP is connected
+# Call: mcp__claude-in-chrome__tabs_context_mcp
+
+# Step 2: If connected, create a tab and navigate
+# Call: mcp__claude-in-chrome__tabs_create_mcp (get a new tab)
+# Call: mcp__claude-in-chrome__navigate with the URL and tabId
+
+# Step 3: If not connected, fall back to show command
+show https://example.com
+```
+
+### Troubleshooting Chrome MCP
+
+| Issue | Solution |
+|-------|----------|
+| `tabs_context_mcp` fails | Chrome extension not connected; use `show` command |
+| Tab ID invalid | Call `tabs_context_mcp` to get fresh tab IDs |
+| Extension disconnected mid-session | Graceful fallback to `show` command |
+| No Chrome MCP tools available | MCP not configured; use `show` command |
+
+### Setup
+
+To use Chrome MCP:
+1. Install the Claude-in-Chrome browser extension
+2. Open Chrome and click the Claude extension icon
+3. The extension connects to Claude Code via MCP
+
+When the extension is not connected, `tabs_context_mcp` will fail, and you should fall back to the standard `show` command.
+
 ## Requirements
 
 - **tmux**: Required for pane management
 - **Neovim**: For file display (with socket support)
-- **Browser**: For URL display (Firefox preferred)
+- **Browser**: For URL display (Firefox preferred, Chrome with MCP preferred for interactive control)
 - **nvim-remote**: Optional, enhances Neovim integration
