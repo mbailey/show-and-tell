@@ -1,1 +1,0 @@
-skills/show-and-tell/SKILL.md
