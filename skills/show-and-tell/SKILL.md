@@ -7,6 +7,8 @@ description: Visual context sharing. LOAD when user says "show me", "open in bro
 
 Display content for users (files, URLs, commands) or observe their screen context.
 
+> **Abstraction layer**: show-and-tell provides high-level "show" and "look" commands that work regardless of whether the user is in tmux, VS Code, or another environment. See [Design Philosophy](docs/commands.md#design-philosophy) for details.
+
 ## Quick Reference
 
 | Command | Example | Description |

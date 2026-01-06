@@ -2,6 +2,23 @@
 
 Full documentation for `show` and `look` commands.
 
+## Design Philosophy
+
+Show-and-tell provides an **abstraction layer** for AI assistants to share visual context with users without requiring knowledge of the underlying display system.
+
+**The key insight:** An agent should be able to say "show the user this file" or "see what the user is looking at" without needing to know whether the user is in tmux, VS Code, a plain terminal, or a web interface.
+
+Currently, the implementation uses tmux + Neovim, but this could be adapted to:
+- VS Code with appropriate extensions
+- Web-based IDEs
+- Plain terminal with less/cat fallbacks
+- Remote display via screen sharing
+
+This separation means:
+- **tmux skill** - teaches an agent how to use tmux directly
+- **neovim skill** - teaches an agent how to use Neovim directly
+- **show-and-tell** - provides high-level "show" and "look" abstractions that work regardless of backend
+
 ## show - Display Content
 
 Opens content for the user to view in the appropriate application.
