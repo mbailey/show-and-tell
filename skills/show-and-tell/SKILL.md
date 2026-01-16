@@ -19,10 +19,40 @@ Display content for users (files, URLs, commands) or observe their screen contex
 
 ## When to Use
 
-- User asks to open/display a file or URL
+- User asks to open/display a file or URL (**For URLs: ALWAYS check Chrome MCP first**)
 - User says "show me" or "look at my screen"
 - Working in voice mode (hands-free interaction)
 - Need to verify what user is viewing
+
+## Showing URLs - Default Behavior
+
+**URLs go to Chrome MCP by default. The `show` command is a fallback.**
+
+### URL Navigation Decision Tree
+
+```
+User requests URL
+    ↓
+Check Chrome MCP available?
+    ├─ Yes → navigate tool (interactive)
+    └─ No  → show command (fallback)
+```
+
+### Standard Workflow
+
+1. **Check**: `mcp__claude-in-chrome__tabs_context_mcp(createIfEmpty=true)`
+2. **If available**:
+   - Inform user: "Opening in Chrome - you may need to approve domain permissions"
+   - Use `tabs_create_mcp` + `navigate` tools for interactive control
+   - On timeout: "Chrome may be waiting for permission approval. Open in default browser instead?"
+3. **If unavailable**: Use `show` command (opens default browser)
+
+**Chrome MCP provides:**
+- Interactive control (scroll, click, fill forms)
+- Screenshots and page inspection
+- Better for demos and automation
+
+The `show` command is a fallback for when Chrome MCP is unavailable.
 
 ## Usage
 
@@ -54,48 +84,33 @@ look window                       # All panes in window
 - [Voice Mode](docs/voice-mode.md) - Hands-free workflows
 - [Troubleshooting](docs/troubleshooting.md) - Common issues
 
-## Chrome Browser Integration
+## Chrome Browser Integration (Reference)
 
-When Claude-in-Chrome MCP is available, prefer using it for URLs to enable interactive browser control.
+This section provides additional details on Chrome MCP integration. **See "Showing URLs - Default Behavior" above for the primary workflow.**
 
-### Why Use Chrome MCP
+### Chrome Domain Permissions
 
-- **Interactive control**: Scroll, click, and interact with page elements
-- **Page inspection**: Read page content with `read_page` tool
-- **Form filling**: Use `form_input` for automated form completion
-- **Screenshots**: Capture visual state with `computer` action: screenshot
-- **Better demos**: Live browser interaction for presentations
+Chrome requires user approval for new domains (security feature).
 
-### Detection and Fallback Pattern
+**Best practices:**
+- Before navigating: Inform user they may need to approve domain permissions
+- On timeout: Explain likely cause - "Chrome may be waiting for permission approval"
+- Offer fallback: "Would you like me to open in default browser instead?"
 
-Before showing a URL, check if you have access to `mcp__claude-in-chrome__` tools:
-
-```
-AI wants to show URL
-    │
-    ▼
-Does AI have mcp__claude-in-chrome__* tools?
-    │
-    ├─ YES ──► Call tabs_context_mcp to verify connection
-    │              │
-    │              ├─ Connected ──► Use navigate tool
-    │              │
-    │              └─ Not connected ──► Fall back to show command
-    │
-    └─ NO ───► Use show command directly
-```
+**Common issue:** If navigation times out, it's usually because the user didn't see or approve the Chrome domain permission prompt.
 
 ### Example: Show URL with Chrome MCP
 
 ```bash
 # Step 1: Check if Chrome MCP is connected
-# Call: mcp__claude-in-chrome__tabs_context_mcp
+# Call: mcp__claude-in-chrome__tabs_context_mcp(createIfEmpty=true)
 
-# Step 2: If connected, create a tab and navigate
+# Step 2: If connected, inform user and navigate
+# "Opening in Chrome - you may need to approve domain permissions"
 # Call: mcp__claude-in-chrome__tabs_create_mcp (get a new tab)
 # Call: mcp__claude-in-chrome__navigate with the URL and tabId
 
-# Step 3: If not connected, fall back to show command
+# Step 3: If not connected or timeout, fall back to show command
 show https://example.com
 ```
 
