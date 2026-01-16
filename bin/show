@@ -78,7 +78,9 @@ Display content for the user to view.
 Targets:
   <file>                   Open file in Neovim
   <file>:<line>            Open file at specific line
+  <file>:<start>-<end>     Open file highlighting line range
   <file>#L<line>           Open file at specific line (URL fragment style)
+  <file>#L<start>-<end>    Open file highlighting line range
   http://... https://...   Open URL in browser
   cmd:<command>            Run command in shell pane
   pane:<id>                Focus tmux pane by ID
@@ -106,6 +108,8 @@ Examples:
   show -s main README.md            # Open in "main" session
   show -w editor file.txt           # Open in "editor" window
   show src/main.py:42               # Open at line 42
+  show src/main.py:10-20            # Open highlighting lines 10-20
+  show bin/show#L124-162            # Highlight function definition
   show https://github.com           # Open in browser
   show "cmd:git status"             # Show git status
   show --no-zoom file.txt           # Open without zooming pane
@@ -121,21 +125,32 @@ Environment:
 EOF
 }
 
-# Parse file:line or file#Lline format
-# Returns: file_path and line_number (empty if no line)
+# Parse file:line or file#Lline format with optional line ranges
+# Returns: file_path, start_line, and end_line (empty if no line/range)
 parse_file_target() {
   local target="$1"
   local file_path=""
-  local line_number=""
+  local start_line=""
+  local end_line=""
 
-  # Check for #L format (URL fragment style)
-  if [[ "$target" =~ ^(.+)#[Ll]([0-9]+)$ ]]; then
+  # Check for range: #L10-20 format (URL fragment style)
+  if [[ "$target" =~ ^(.+)#[Ll]([0-9]+)-([0-9]+)$ ]]; then
     file_path="${BASH_REMATCH[1]}"
-    line_number="${BASH_REMATCH[2]}"
-  # Check for :line format
+    start_line="${BASH_REMATCH[2]}"
+    end_line="${BASH_REMATCH[3]}"
+  # Check for range: :10-20 format
+  elif [[ "$target" =~ ^(.+):([0-9]+)-([0-9]+)$ ]]; then
+    file_path="${BASH_REMATCH[1]}"
+    start_line="${BASH_REMATCH[2]}"
+    end_line="${BASH_REMATCH[3]}"
+  # Check for single line: #L format (URL fragment style)
+  elif [[ "$target" =~ ^(.+)#[Ll]([0-9]+)$ ]]; then
+    file_path="${BASH_REMATCH[1]}"
+    start_line="${BASH_REMATCH[2]}"
+  # Check for single line: :line format
   elif [[ "$target" =~ ^(.+):([0-9]+)$ ]]; then
     file_path="${BASH_REMATCH[1]}"
-    line_number="${BASH_REMATCH[2]}"
+    start_line="${BASH_REMATCH[2]}"
   else
     file_path="$target"
   fi
@@ -146,7 +161,8 @@ parse_file_target() {
   fi
 
   echo "$file_path"
-  echo "$line_number"
+  echo "$start_line"
+  echo "$end_line"
 }
 
 # Check if a tmux session has any attached clients
@@ -288,13 +304,15 @@ handle_file() {
   local window="$3"
   local explicit_pane="${4:-}"
 
-  # Parse file and line number
+  # Parse file and line number/range
   local parsed
   parsed=$(parse_file_target "$target")
   local file_path
-  local line_number
-  file_path=$(echo "$parsed" | head -1)
-  line_number=$(echo "$parsed" | tail -1)
+  local start_line
+  local end_line
+  file_path=$(echo "$parsed" | sed -n '1p')
+  start_line=$(echo "$parsed" | sed -n '2p')
+  end_line=$(echo "$parsed" | sed -n '3p')
 
   # Resolve to absolute path
   if [[ ! "$file_path" =~ ^/ ]]; then
@@ -327,12 +345,18 @@ handle_file() {
     # Socket exists, wait for it to be responsive (may have just started)
     if wait_for_nvim_socket "$socket_path" 5 0.2; then
       # Neovim running and responsive, open file remotely
-      if [[ -n "$line_number" && "$line_number" =~ ^[0-9]+$ ]]; then
-        nvim --server "$socket_path" --remote "$file_path" 2>/dev/null
-        nvim --server "$socket_path" --remote-send ":${line_number}<CR>" 2>/dev/null
-        echo "Opened $file_path at line $line_number in ${session}:${window}"
+      nvim --server "$socket_path" --remote "$file_path" 2>/dev/null
+
+      if [[ -n "$end_line" && "$end_line" =~ ^[0-9]+$ ]]; then
+        # Line range: use visual line mode to highlight
+        nvim --server "$socket_path" --remote-send ":${start_line}<CR>V${end_line}G" 2>/dev/null
+        echo "Opened $file_path highlighting lines $start_line-$end_line in ${session}:${window}"
+      elif [[ -n "$start_line" && "$start_line" =~ ^[0-9]+$ ]]; then
+        # Single line: jump to line
+        nvim --server "$socket_path" --remote-send ":${start_line}<CR>" 2>/dev/null
+        echo "Opened $file_path at line $start_line in ${session}:${window}"
       else
-        nvim --server "$socket_path" --remote "$file_path" 2>/dev/null
+        # No line number
         echo "Opened $file_path in ${session}:${window}"
       fi
     else
@@ -346,11 +370,17 @@ handle_file() {
 
     # Wait for Neovim to start and socket to become available
     if wait_for_nvim_socket "$socket_path"; then
-      # Socket ready, now jump to line if specified
-      if [[ -n "$line_number" && "$line_number" =~ ^[0-9]+$ ]]; then
-        nvim --server "$socket_path" --remote-send ":${line_number}<CR>" 2>/dev/null
-        echo "Opened $file_path at line $line_number in ${session}:${window}"
+      # Socket ready, now jump to line/range if specified
+      if [[ -n "$end_line" && "$end_line" =~ ^[0-9]+$ ]]; then
+        # Line range: use visual line mode to highlight
+        nvim --server "$socket_path" --remote-send ":${start_line}<CR>V${end_line}G" 2>/dev/null
+        echo "Opened $file_path highlighting lines $start_line-$end_line in ${session}:${window}"
+      elif [[ -n "$start_line" && "$start_line" =~ ^[0-9]+$ ]]; then
+        # Single line: jump to line
+        nvim --server "$socket_path" --remote-send ":${start_line}<CR>" 2>/dev/null
+        echo "Opened $file_path at line $start_line in ${session}:${window}"
       else
+        # No line number
         echo "Opened $file_path in ${session}:${window}"
       fi
     else

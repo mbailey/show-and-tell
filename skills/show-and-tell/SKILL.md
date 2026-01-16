@@ -12,6 +12,7 @@ Display content for users (files, URLs, commands) or observe their screen contex
 | Command | Example | Description |
 |---------|---------|-------------|
 | `show <file>` | `show README.md:42` | Open file in Neovim at line |
+| `show <file>` | `show main.py:10-20` | Open file highlighting line range |
 | `show <url>` | `show github.com` | Open URL in browser |
 | `show "cmd:..."` | `show "cmd:git log"` | Run command in shell pane |
 | `look` | `look -l 100` | Capture pane content |
@@ -63,6 +64,8 @@ The `show` command is a fallback for when Chrome MCP is unavailable.
 ```bash
 show README.md                    # Open file
 show src/main.py:42               # Open at line 42
+show src/main.py:10-20            # Open highlighting lines 10-20
+show bin/show#L124-162            # Highlight function (URL fragment syntax)
 show https://github.com/repo      # Open URL
 show "cmd:git status"             # Run command
 show pane:15                      # Focus pane
