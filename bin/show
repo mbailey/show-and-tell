@@ -84,6 +84,8 @@ Targets:
   http://... https://...   Open URL in browser
   cmd:<command>            Run command in shell pane
   pane:<id>                Focus tmux pane by ID
+  window:<index|name>      Switch to tmux window
+  w:<pattern>              Switch to window matching pattern
 
 Options:
   -s, --session NAME       Use specific tmux session
@@ -112,6 +114,8 @@ Examples:
   show bin/show#L124-162            # Highlight function definition
   show https://github.com           # Open in browser
   show "cmd:git status"             # Show git status
+  show window:2                     # Switch to window 2
+  show w:cli                        # Switch to window with 'cli' in name
   show --no-zoom file.txt           # Open without zooming pane
 
 Environment:
@@ -522,12 +526,53 @@ handle_pane() {
   echo "Focused pane $pane_spec"
 }
 
+# Handle window switching
+handle_window() {
+  local target="$1"
+  local session="$2"
+
+  # Remove window: or w: prefix if present
+  if [[ "$target" =~ ^window:(.+)$ ]]; then
+    target="${BASH_REMATCH[1]}"
+  elif [[ "$target" =~ ^w:(.+)$ ]]; then
+    # For w: prefix, search for pattern match
+    local pattern="${BASH_REMATCH[1]}"
+    local matched_window
+    matched_window=$(tmux list-windows -t "$session" -F "#{window_index} #{window_name}" 2>/dev/null \
+      | grep -i "$pattern" | head -1 | awk '{print $1}')
+
+    if [[ -z "$matched_window" ]]; then
+      echo "Error: No window matching '$pattern' found in session $session" >&2
+      return 1
+    fi
+    target="$matched_window"
+  fi
+
+  # Switch to the window
+  if tmux select-window -t "${session}:${target}" 2>/dev/null; then
+    # Get the window name for feedback
+    local window_name
+    window_name=$(tmux display-message -t "${session}:${target}" -p "#{window_name}" 2>/dev/null)
+    echo "Switched to window '${window_name}' in session ${session}"
+    return 0
+  else
+    echo "Error: Window '${target}' not found in session ${session}" >&2
+    return 1
+  fi
+}
+
 # Detect target type and dispatch to handler
 detect_and_handle() {
   local target="$1"
   local session="$2"
   local window="$3"
   local pane="${4:-}"
+
+  # Window switching (window: or w: prefix)
+  if [[ "$target" =~ ^(window:|w:) ]]; then
+    handle_window "$target" "$session"
+    return
+  fi
 
   # URL (http:// or https://)
   if [[ "$target" =~ ^https?:// ]]; then
