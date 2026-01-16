@@ -15,6 +15,8 @@ Display content for users (files, URLs, commands) or observe their screen contex
 | `show <file>` | `show main.py:10-20` | Open file highlighting line range |
 | `show <url>` | `show github.com` | Open URL in browser |
 | `show "cmd:..."` | `show "cmd:git log"` | Run command in shell pane |
+| `show window:N` | `show window:2` | Switch to tmux window by index |
+| `show w:pattern` | `show w:cli` | Switch to window matching pattern |
 | `look` | `look -l 100` | Capture pane content |
 | `look -H` | `look -H` | Show tmux hierarchy only |
 
@@ -69,6 +71,8 @@ show bin/show#L124-162            # Highlight function (URL fragment syntax)
 show https://github.com/repo      # Open URL
 show "cmd:git status"             # Run command
 show pane:15                      # Focus pane
+show window:2                     # Switch to window 2
+show w:cli                        # Switch to window matching 'cli'
 ```
 
 ### look - Observe Context
