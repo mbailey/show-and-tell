@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Add line range highlighting** (SAT-6)
+  - Highlight multiple lines when opening files in Neovim
+  - Support colon syntax: `show file.py:10-20` for lines 10-20
+  - Support URL fragment syntax: `show file.py#L10-20`
+  - Use Neovim visual line mode for clear highlighting
+  - Maintain backward compatibility with single line syntax (`:42` or `#L42`)
+
+### Changed
+
+- **Prioritize Chrome MCP for URL navigation** (SAT-16)
+  - Guide AI to check Chrome MCP first when showing URLs
+  - Add decision tree for URL navigation flow
+  - Use show command as fallback when Chrome MCP unavailable
+  - Include domain permission handling guidance for Chrome
+
 ## [1.0.4] - 2026-01-07
 
 ### Added
